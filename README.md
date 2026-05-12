@@ -67,9 +67,9 @@ Si aprirà una finestra ridimensionabile con il feed della webcam. Il programma 
 
 | Tasto | Quando | Funzione |
 |---|---|---|
-| `S` | Solo in idle | Avvia il buffering |
+| `N` | In idle | Avvia il buffering |
 | `SPAZIO` | Durante buffering | Predizione immediata: ripete i frame catturati fino a 384 e lancia l'inferenza. Utile per segni statici o brevi — bastano 1-2 secondi |
-| `N` | Durante buffering | Resetta il buffer e ricomincia la raccolta |
+| `L` | Sempre | Attiva/disattiva la visualizzazione dei landmark MediaPipe |
 | `Q` | Sempre | Chiude l'applicazione |
 
 > **Consiglio per segni dinamici** (es. "yes", "no"): prima di premere `SPAZIO` cattura almeno 2-3 cicli completi del movimento, altrimenti la ripetizione dei frame potrebbe non contenere abbastanza informazione sul pattern.
@@ -78,9 +78,10 @@ Si aprirà una finestra ridimensionabile con il feed della webcam. Il programma 
 
 Lo script stampa lo stato del programma direttamente in console:
 ```
-[status] IDLE — fotocamera avviata. Premi S per iniziare.
-[status] BUFFERING — raccolta frame avviata.
+[status] IDLE — fotocamera avviata. Premi N per avviare.
+[status] BUFFERING — nuova raccolta avviata.
 [predizione] nose  (87%)
+[status] IDLE — predizione inviata. Premi N per una nuova predizione.
 [predizione] yes  (72%)
 ```
 
