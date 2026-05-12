@@ -303,11 +303,15 @@ def tile_to_sequence(frames: list) -> deque:
     tiled = tiled[:SEQUENCE_LENGTH]
     return deque(tiled, maxlen=SEQUENCE_LENGTH)
 
+# stati del programma
+IDLE      = "idle"
+BUFFERING = "buffering"
+
 # ==============================================================================
 #  HUD
 # ==============================================================================
 
-def draw_hud(frame, text, confidence, queue_len, manual_mode: bool):
+def draw_hud(frame, text, confidence, queue_len, state: str):
     h, w = frame.shape[:2]
     cv2.rectangle(frame, (0, 0), (w, 55), (20, 20, 20), -1)
     color = (0, 220, 80) if confidence >= CONFIDENCE_THRESHOLD else (60, 180, 220)
@@ -315,13 +319,13 @@ def draw_hud(frame, text, confidence, queue_len, manual_mode: bool):
                 (12, 40), cv2.FONT_HERSHEY_DUPLEX, 1.1, color, 2, cv2.LINE_AA)
     bar_h = 18
     cv2.rectangle(frame, (0, h - bar_h), (w, h), (30, 30, 30), -1)
-    fill  = int(w * queue_len / SEQUENCE_LENGTH)
-    col   = (0, 200, 80) if queue_len == SEQUENCE_LENGTH else (0, 130, 200)
+    fill = int(w * queue_len / SEQUENCE_LENGTH)
+    col  = (0, 200, 80) if queue_len == SEQUENCE_LENGTH else (0, 130, 200)
     cv2.rectangle(frame, (0, h - bar_h), (fill, h), col, -1)
-    if manual_mode:
-        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [n reset]  [q esci]"
+    if state == IDLE:
+        hint = "IDLE — Premi S per avviare  [q esci]"
     else:
-        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [n reset]  [q per uscire]"
+        hint = f"BUFFERING {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [n reset]  [q esci]"
     cv2.putText(frame, hint, (6, h - 3), cv2.FONT_HERSHEY_PLAIN, 1, (200, 200, 200), 1, cv2.LINE_AA)
 
 # ==============================================================================
@@ -340,18 +344,18 @@ def main():
     spec_hand   = mp_draw.DrawingSpec(color=(200,  30, 100), thickness=2, circle_radius=3)
 
     sequence: deque[np.ndarray] = deque(maxlen=SEQUENCE_LENGTH)
-
-    # modalità manuale: SPAZIO congela il buffer e lancia l'inferenza con ripetizione
-    manual_mode = True
+    state     = IDLE
+    last_pred = None  # tiene traccia dell'ultima predizione per stampare solo i cambiamenti
 
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT,  720)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
-    print(f"[camera] avviata. Buffer: {SEQUENCE_LENGTH} frame "
-          f"(~{SEQUENCE_LENGTH/30:.1f}s a 30fps).")
-    print(f"[modalita'] manuale=True  —  SPAZIO per predire ora, Q per uscire.")
+    cv2.namedWindow("ASL Real-time Recognition", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("ASL Real-time Recognition", 854, 480)
+
+    print("[status] IDLE — fotocamera avviata. Premi S per iniziare.")
 
     with mp_holistic.Holistic(
         min_detection_confidence=0.5,
@@ -381,28 +385,44 @@ def main():
             mp_draw.draw_landmarks(frame, results.right_hand_landmarks,
                 mp_holistic.HAND_CONNECTIONS, spec_hand, spec_hand)
 
-            sequence.append(extract_frame(results))
+            if state == BUFFERING:
+                sequence.append(extract_frame(results))
 
-            # buffer pieno: inferenza automatica
-            if len(sequence) == SEQUENCE_LENGTH:
+            # buffer pieno: inferenza automatica, riparte il buffering
+            if state == BUFFERING and len(sequence) == SEQUENCE_LENGTH:
                 worker.submit(preprocess_sequence(sequence))
                 sequence.clear()
+                state = BUFFERING  # riparte subito senza tornare in idle
 
-            draw_hud(frame, worker.prediction, worker.confidence, len(sequence), manual_mode)
+            # stampa in console quando arriva una nuova predizione
+            current_pred = (worker.prediction, round(worker.confidence, 2))
+            if current_pred != last_pred and worker.prediction != "Raccolta dati...":
+                print(f"[predizione] {worker.prediction}  ({worker.confidence:.0%})")
+                last_pred = current_pred
+
+            draw_hud(frame, worker.prediction, worker.confidence, len(sequence), state)
             cv2.imshow("ASL Real-time Recognition", frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            # SPAZIO: predizione manuale con ripetizione dei frame catturati
-            if key == ord(" ") and len(sequence) >= MIN_FRAMES_FOR_PREDICT:
+            # S: avvia il buffering (solo da idle, solo al primo avvio)
+            if key == ord("s") and state == IDLE:
+                state = BUFFERING
+                sequence.clear()
+                print("[status] BUFFERING — raccolta frame avviata.")
+            # SPAZIO: predizione immediata con ripetizione, riparte il buffering
+            if key == ord(" ") and state == BUFFERING and len(sequence) >= MIN_FRAMES_FOR_PREDICT:
                 tiled = tile_to_sequence(list(sequence))
                 worker.submit(preprocess_sequence(tiled))
                 sequence.clear()
-            # N: reset predizione e buffer
-            if key == ord("n"):
+                print("[status] BUFFERING — predizione inviata, nuovo buffer avviato.")
+            # N: reset buffer, riparte il buffering
+            if key == ord("n") and state == BUFFERING:
                 sequence.clear()
                 worker.reset()
+                last_pred = None
+                print("[status] BUFFERING — buffer resettato, nuova raccolta avviata.")
 
     worker.stop()
     worker.join(timeout=2.0)
