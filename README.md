@@ -102,16 +102,26 @@ Le versioni indicate sono quelle testate e verificate. **Non aggiornare `tensorf
 
 ## Struttura del progetto
 
-```
-ASL model project/
-├── asl_realtime_inference.py        # Script principale di inferenza
-├── asl_model_complete.keras         # Modello Keras addestrato
-├── asl_pure_tf_blackbox.zip         # Modello TensorFlow SavedModel (usato a runtime)
-├── sign_to_prediction_index_map.json  # Mappatura indice → nome del segno (250 classi)
-├── avvia.ps1                        # Script di avvio rapido
-├── setup.ps1                        # Script di installazione automatica
-└── Docs/                            # Documentazione aggiuntiva
-```
+### File necessari
+
+| File | Scopo |
+|---|---|
+| `asl_realtime_inference.py` | Script principale di inferenza |
+| `asl_pure_tf_blackbox.zip` | Modello TensorFlow SavedModel usato a runtime |
+| `sign_to_prediction_index_map.json` | Mappatura indici → nomi dei 250 segni ASL |
+| `avvia.ps1` | Script di avvio rapido |
+| `setup.ps1` | Script di installazione automatica dell'ambiente |
+| `.gitignore` | Esclude dal repository i file generati automaticamente |
+| `README.md` | Documentazione del progetto |
+
+### File superflui al funzionamento
+
+| File/Cartella | Motivo |
+|---|---|
+| `asl_model_complete.keras` | Lo script usa solo `asl_pure_tf_blackbox.zip` — questo file non viene mai caricato a runtime |
+| `_savedmodel_extracted/` | Generata automaticamente dallo script al primo avvio estraendo lo ZIP — può essere cancellata, verrà ricreata |
+| `Docs/MITA_Sign_Recognition.ipynb` | Notebook di sviluppo, non usato a runtime |
+| `.claude/` | File interni di Claude Code, non pertinenti al progetto |
 
 ---
 
