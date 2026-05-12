@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+.venv311/
+
+# Extracted SavedModel (si ricrea automaticamente dallo zip all'avvio)
+_savedmodel/
+_savedmodel_extracted/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# File vuoto
+model
+
+# Credenziali
+kaggle.json
+
+# File temporanei di test (non necessari per l'uso)
+_test_imports.py
+_test_savedmodel.py
+_inspect_model.py
