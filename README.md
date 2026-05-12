@@ -55,7 +55,15 @@ Dopo il setup, avvia il progetto con:
 
 Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconoscere i segni ASL non appena il buffer si riempie (~13 secondi a 30 fps).
 
-**Tasto `q`** — chiude l'applicazione.
+### Tasti
+
+| Tasto | Funzione |
+|---|---|
+| `SPAZIO` | Predizione immediata: ripete i frame catturati fino a 384 e lancia l'inferenza. Utile per segni statici o brevi (es. "nose") — bastano 1-2 secondi di cattura |
+| `N` | Reset: svuota il buffer e azzera la predizione mostrata, per iniziare una nuova cattura da zero |
+| `Q` | Chiude l'applicazione |
+
+> **Consiglio per segni dinamici** (es. "yes", "no"): prima di premere `SPAZIO` cattura almeno 2-3 cicli completi del movimento, altrimenti la ripetizione dei frame potrebbe non contenere abbastanza informazione sul pattern.
 
 ---
 
@@ -102,8 +110,8 @@ ASL model project/
 - **Barra superiore**: segno riconosciuto + percentuale di confidenza
   - Verde: confidenza ≥ 40%
   - Azzurro: confidenza sotto soglia (`???`)
-- **Barra inferiore**: avanzamento del buffer (blu durante il riempimento, verde quando pieno)
-- Il riconoscimento parte automaticamente quando il buffer raggiunge i 384 frame
+- **Barra inferiore**: avanzamento del buffer (blu durante il riempimento, verde quando pieno) con promemoria dei tasti disponibili
+- Il riconoscimento parte automaticamente quando il buffer raggiunge i 384 frame, oppure manualmente con `SPAZIO`
 
 ---
 
