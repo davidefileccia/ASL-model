@@ -258,6 +258,12 @@ class InferenceWorker(threading.Thread):
             self._pending = arr
         self._event.set()
 
+    def reset(self):
+        with self._lock:
+            self._pending = None
+        self.prediction = "Raccolta dati..."
+        self.confidence = 0.0
+
     def stop(self):
         self._running = False
         self._event.set()
@@ -313,9 +319,9 @@ def draw_hud(frame, text, confidence, queue_len, manual_mode: bool):
     col   = (0, 200, 80) if queue_len == SEQUENCE_LENGTH else (0, 130, 200)
     cv2.rectangle(frame, (0, h - bar_h), (fill, h), col, -1)
     if manual_mode:
-        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [q esci]"
+        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [n reset]  [q esci]"
     else:
-        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [q per uscire]"
+        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [n reset]  [q per uscire]"
     cv2.putText(frame, hint, (6, h - 3), cv2.FONT_HERSHEY_PLAIN, 1, (200, 200, 200), 1, cv2.LINE_AA)
 
 # ==============================================================================
@@ -393,6 +399,10 @@ def main():
                 tiled = tile_to_sequence(list(sequence))
                 worker.submit(preprocess_sequence(tiled))
                 sequence.clear()
+            # N: reset predizione e buffer
+            if key == ord("n"):
+                sequence.clear()
+                worker.reset()
 
     worker.stop()
     worker.join(timeout=2.0)
