@@ -283,10 +283,25 @@ class InferenceWorker(threading.Thread):
                 print(f"[InferenceWorker] {exc}")
 
 # ==============================================================================
+#  RIPETIZIONE FRAME
+# ==============================================================================
+
+MIN_FRAMES_FOR_PREDICT = 15  # minimo assoluto per evitare predizioni su nulla
+
+def tile_to_sequence(frames: list) -> deque:
+    """Ripete i frame catturati in loop fino a raggiungere SEQUENCE_LENGTH."""
+    n = len(frames)
+    tiled = []
+    while len(tiled) < SEQUENCE_LENGTH:
+        tiled.extend(frames)
+    tiled = tiled[:SEQUENCE_LENGTH]
+    return deque(tiled, maxlen=SEQUENCE_LENGTH)
+
+# ==============================================================================
 #  HUD
 # ==============================================================================
 
-def draw_hud(frame, text, confidence, queue_len):
+def draw_hud(frame, text, confidence, queue_len, manual_mode: bool):
     h, w = frame.shape[:2]
     cv2.rectangle(frame, (0, 0), (w, 55), (20, 20, 20), -1)
     color = (0, 220, 80) if confidence >= CONFIDENCE_THRESHOLD else (60, 180, 220)
@@ -297,8 +312,11 @@ def draw_hud(frame, text, confidence, queue_len):
     fill  = int(w * queue_len / SEQUENCE_LENGTH)
     col   = (0, 200, 80) if queue_len == SEQUENCE_LENGTH else (0, 130, 200)
     cv2.rectangle(frame, (0, h - bar_h), (fill, h), col, -1)
-    cv2.putText(frame, f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [q per uscire]",
-                (6, h - 3), cv2.FONT_HERSHEY_PLAIN, 1, (200, 200, 200), 1, cv2.LINE_AA)
+    if manual_mode:
+        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [q esci]"
+    else:
+        hint = f"Buffer {queue_len}/{SEQUENCE_LENGTH}  [q per uscire]"
+    cv2.putText(frame, hint, (6, h - 3), cv2.FONT_HERSHEY_PLAIN, 1, (200, 200, 200), 1, cv2.LINE_AA)
 
 # ==============================================================================
 #  MAIN
@@ -317,13 +335,17 @@ def main():
 
     sequence: deque[np.ndarray] = deque(maxlen=SEQUENCE_LENGTH)
 
+    # modalità manuale: SPAZIO congela il buffer e lancia l'inferenza con ripetizione
+    manual_mode = True
+
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT,  720)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
     print(f"[camera] avviata. Buffer: {SEQUENCE_LENGTH} frame "
-          f"(~{SEQUENCE_LENGTH/30:.1f}s a 30fps). Premi 'q' per uscire.")
+          f"(~{SEQUENCE_LENGTH/30:.1f}s a 30fps).")
+    print(f"[modalita'] manuale=True  —  SPAZIO per predire ora, Q per uscire.")
 
     with mp_holistic.Holistic(
         min_detection_confidence=0.5,
@@ -355,13 +377,22 @@ def main():
 
             sequence.append(extract_frame(results))
 
+            # buffer pieno: inferenza automatica
             if len(sequence) == SEQUENCE_LENGTH:
                 worker.submit(preprocess_sequence(sequence))
+                sequence.clear()
 
-            draw_hud(frame, worker.prediction, worker.confidence, len(sequence))
+            draw_hud(frame, worker.prediction, worker.confidence, len(sequence), manual_mode)
             cv2.imshow("ASL Real-time Recognition", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            # SPAZIO: predizione manuale con ripetizione dei frame catturati
+            if key == ord(" ") and len(sequence) >= MIN_FRAMES_FOR_PREDICT:
+                tiled = tile_to_sequence(list(sequence))
+                worker.submit(preprocess_sequence(tiled))
+                sequence.clear()
 
     worker.stop()
     worker.join(timeout=2.0)
