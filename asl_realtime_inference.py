@@ -311,7 +311,7 @@ BUFFERING = "buffering"
 #  HUD
 # ==============================================================================
 
-def draw_hud(frame, text, confidence, queue_len, state: str):
+def draw_hud(frame, text, confidence, queue_len, state: str, show_landmarks: bool):
     h, w = frame.shape[:2]
     cv2.rectangle(frame, (0, 0), (w, 55), (20, 20, 20), -1)
     color = (0, 220, 80) if confidence >= CONFIDENCE_THRESHOLD else (60, 180, 220)
@@ -322,10 +322,11 @@ def draw_hud(frame, text, confidence, queue_len, state: str):
     fill = int(w * queue_len / SEQUENCE_LENGTH)
     col  = (0, 200, 80) if queue_len == SEQUENCE_LENGTH else (0, 130, 200)
     cv2.rectangle(frame, (0, h - bar_h), (fill, h), col, -1)
+    lm_str = "l lm:ON" if show_landmarks else "l lm:OFF"
     if state == IDLE:
-        hint = "IDLE — Premi S per avviare  [q esci]"
+        hint = f"IDLE — Premi N per avviare  [{lm_str}]  [q esci]"
     else:
-        hint = f"BUFFERING {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [n reset]  [q esci]"
+        hint = f"BUFFERING {queue_len}/{SEQUENCE_LENGTH}  [SPAZIO predici ora]  [{lm_str}]  [q esci]"
     cv2.putText(frame, hint, (6, h - 3), cv2.FONT_HERSHEY_PLAIN, 1, (200, 200, 200), 1, cv2.LINE_AA)
 
 # ==============================================================================
@@ -343,9 +344,10 @@ def main():
     spec_pose   = mp_draw.DrawingSpec(color=(30,  80, 200), thickness=2, circle_radius=3)
     spec_hand   = mp_draw.DrawingSpec(color=(200,  30, 100), thickness=2, circle_radius=3)
 
-    sequence: deque[np.ndarray] = deque(maxlen=SEQUENCE_LENGTH)
-    state     = IDLE
-    last_pred = None  # tiene traccia dell'ultima predizione per stampare solo i cambiamenti
+    sequence       = deque(maxlen=SEQUENCE_LENGTH)
+    state          = IDLE
+    last_pred      = None
+    show_landmarks = True
 
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
@@ -375,15 +377,16 @@ def main():
             results = holistic.process(rgb)
             rgb.flags.writeable = True
 
-            if results.face_landmarks:
-                mp_draw.draw_landmarks(frame, results.face_landmarks,
-                    mp_holistic.FACEMESH_CONTOURS, spec_face, spec_face)
-            mp_draw.draw_landmarks(frame, results.pose_landmarks,
-                mp_holistic.POSE_CONNECTIONS, spec_pose, spec_pose)
-            mp_draw.draw_landmarks(frame, results.left_hand_landmarks,
-                mp_holistic.HAND_CONNECTIONS, spec_hand, spec_hand)
-            mp_draw.draw_landmarks(frame, results.right_hand_landmarks,
-                mp_holistic.HAND_CONNECTIONS, spec_hand, spec_hand)
+            if show_landmarks:
+                if results.face_landmarks:
+                    mp_draw.draw_landmarks(frame, results.face_landmarks,
+                        mp_holistic.FACEMESH_CONTOURS, spec_face, spec_face)
+                mp_draw.draw_landmarks(frame, results.pose_landmarks,
+                    mp_holistic.POSE_CONNECTIONS, spec_pose, spec_pose)
+                mp_draw.draw_landmarks(frame, results.left_hand_landmarks,
+                    mp_holistic.HAND_CONNECTIONS, spec_hand, spec_hand)
+                mp_draw.draw_landmarks(frame, results.right_hand_landmarks,
+                    mp_holistic.HAND_CONNECTIONS, spec_hand, spec_hand)
 
             if state == BUFFERING:
                 sequence.append(extract_frame(results))
@@ -400,29 +403,30 @@ def main():
                 print(f"[predizione] {worker.prediction}  ({worker.confidence:.0%})")
                 last_pred = current_pred
 
-            draw_hud(frame, worker.prediction, worker.confidence, len(sequence), state)
+            draw_hud(frame, worker.prediction, worker.confidence, len(sequence), state, show_landmarks)
             cv2.imshow("ASL Real-time Recognition", frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            # S: avvia il buffering (solo da idle, solo al primo avvio)
-            if key == ord("s") and state == IDLE:
-                state = BUFFERING
-                sequence.clear()
-                print("[status] BUFFERING — raccolta frame avviata.")
-            # SPAZIO: predizione immediata con ripetizione, riparte il buffering
+            # SPAZIO: predizione immediata con ripetizione, torna in idle
             if key == ord(" ") and state == BUFFERING and len(sequence) >= MIN_FRAMES_FOR_PREDICT:
                 tiled = tile_to_sequence(list(sequence))
                 worker.submit(preprocess_sequence(tiled))
                 sequence.clear()
-                print("[status] BUFFERING — predizione inviata, nuovo buffer avviato.")
-            # N: reset buffer, riparte il buffering
-            if key == ord("n") and state == BUFFERING:
+                state = IDLE
+                print("[status] IDLE — predizione inviata. Premi N per una nuova predizione.")
+            # N: avvia nuovo buffering (solo da idle)
+            if key == ord("n") and state == IDLE:
                 sequence.clear()
                 worker.reset()
                 last_pred = None
-                print("[status] BUFFERING — buffer resettato, nuova raccolta avviata.")
+                state = BUFFERING
+                print("[status] BUFFERING — nuova raccolta avviata.")
+            # L: toggle visualizzazione landmark
+            if key == ord("l"):
+                show_landmarks = not show_landmarks
+                print(f"[status] landmark {'ON' if show_landmarks else 'OFF'}")
 
     worker.stop()
     worker.join(timeout=2.0)
