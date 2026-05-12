@@ -53,17 +53,36 @@ Dopo il setup, avvia il progetto con:
 .\avvia.ps1
 ```
 
-Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconoscere i segni ASL non appena il buffer si riempie (~13 secondi a 30 fps).
+Si aprirà una finestra ridimensionabile con il feed della webcam. Il programma parte in stato **IDLE** e attende che l'utente avvii la predizione.
+
+### Stati del programma
+
+| Stato | Descrizione |
+|---|---|
+| `IDLE` | Fotocamera attiva, nessun buffering. Mostrato solo al primo avvio |
+| `BUFFERING` | Raccolta frame in corso. Il buffer si riempie fino a 384 frame (~13s a 30fps) |
+| `PREDIZIONE` | Il risultato viene mostrato sull'HUD e stampato in console |
 
 ### Tasti
 
-| Tasto | Funzione |
-|---|---|
-| `SPAZIO` | Predizione immediata: ripete i frame catturati fino a 384 e lancia l'inferenza. Utile per segni statici o brevi (es. "nose") — bastano 1-2 secondi di cattura |
-| `N` | Reset: svuota il buffer e azzera la predizione mostrata, per iniziare una nuova cattura da zero |
-| `Q` | Chiude l'applicazione |
+| Tasto | Quando | Funzione |
+|---|---|---|
+| `S` | Solo in idle | Avvia il buffering |
+| `SPAZIO` | Durante buffering | Predizione immediata: ripete i frame catturati fino a 384 e lancia l'inferenza. Utile per segni statici o brevi — bastano 1-2 secondi |
+| `N` | Durante buffering | Resetta il buffer e ricomincia la raccolta |
+| `Q` | Sempre | Chiude l'applicazione |
 
 > **Consiglio per segni dinamici** (es. "yes", "no"): prima di premere `SPAZIO` cattura almeno 2-3 cicli completi del movimento, altrimenti la ripetizione dei frame potrebbe non contenere abbastanza informazione sul pattern.
+
+### Output in console
+
+Lo script stampa lo stato del programma direttamente in console:
+```
+[status] IDLE — fotocamera avviata. Premi S per iniziare.
+[status] BUFFERING — raccolta frame avviata.
+[predizione] nose  (87%)
+[predizione] yes  (72%)
+```
 
 ---
 
