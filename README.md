@@ -1,6 +1,12 @@
 # ASL Real-time Recognition
 
-Riconoscimento in tempo reale dei segni del linguaggio dei segni americano (ASL) tramite webcam, utilizzando MediaPipe per il rilevamento dei landmark e un modello TensorFlow addestrato su [Google Isolated Sign Language Recognition (Kaggle)](https://www.kaggle.com/competitions/asl-signs).
+Riconoscimento in tempo reale dei segni del linguaggio dei segni americano (ASL) tramite webcam, utilizzando MediaPipe per il rilevamento dei landmark e un modello TensorFlow addestrato sul dataset [Google Isolated Sign Language Recognition (Kaggle)](https://www.kaggle.com/competitions/asl-signs).
+
+---
+
+## Crediti
+
+La rete neurale utilizzata in questo progetto è stata creata da **[hoyso48](https://www.kaggle.com/hoyso48)**, vincitore della competizione Kaggle *Google - Isolated Sign Language Recognition*. Il modello originale e il notebook di training sono disponibili sulla sua pagina Kaggle.
 
 ---
 
@@ -12,6 +18,7 @@ Riconoscimento in tempo reale dei segni del linguaggio dei segni americano (ASL)
 | Python | 3.11 (installato automaticamente da `setup.ps1`) |
 | Webcam | Qualsiasi webcam USB o integrata |
 | Connessione Internet | Necessaria solo durante il setup |
+| Spazio su disco | ~2 GB (Python + librerie + modello) |
 
 ---
 
@@ -30,21 +37,23 @@ Riconoscimento in tempo reale dei segni del linguaggio dei segni americano (ASL)
 Lo script esegue automaticamente:
 - Download e installazione di **Python 3.11.9**
 - Creazione del virtual environment in `C:\asl_env`
-- Installazione di tutte le librerie necessarie
+- Installazione di tutte le librerie con le versioni corrette
 
-> Il setup richiede circa **5-10 minuti** a seconda della velocità della connessione (TensorFlow pesa ~350 MB).
+> Il setup richiede circa **5-10 minuti** (~500 MB di download).
+
+> Il virtual environment viene creato in `C:\asl_env` invece che nella cartella del progetto per evitare problemi di encoding con percorsi che contengono caratteri speciali (es. `°`).
 
 ---
 
 ## Avvio
 
-Dopo aver completato il setup, avvia il progetto con:
+Dopo il setup, avvia il progetto con:
 
 ```powershell
 .\avvia.ps1
 ```
 
-Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconoscere i segni ASL una volta riempito il buffer (circa 13 secondi a 30 fps).
+Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconoscere i segni ASL non appena il buffer si riempie (~13 secondi a 30 fps).
 
 **Tasto `q`** — chiude l'applicazione.
 
@@ -52,12 +61,14 @@ Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconos
 
 ## Librerie utilizzate
 
+Le versioni indicate sono quelle testate e verificate. **Non aggiornare `tensorflow` e `mediapipe` arbitrariamente**: versioni più recenti di mediapipe (≥ 0.10.20 circa) hanno rimosso l'API `mp.solutions` usata dallo script, e versioni più recenti di TensorFlow causano conflitti su `protobuf` e `jax`.
+
 | Libreria | Versione | Scopo |
 |---|---|---|
-| `tensorflow` | 2.x | Caricamento ed esecuzione del modello di classificazione |
-| `mediapipe` | 0.10.x | Rilevamento landmark di viso, mani e corpo in tempo reale |
-| `opencv-python` | 4.x | Cattura video dalla webcam e rendering dell'interfaccia |
-| `numpy` | 2.x | Elaborazione numerica degli array di landmark |
+| `tensorflow` | 2.17.0 | Caricamento ed esecuzione del modello di classificazione |
+| `mediapipe` | 0.10.14 | Rilevamento landmark di viso, mani e corpo in tempo reale |
+| `opencv-python` | ultima stabile | Cattura video dalla webcam e rendering dell'interfaccia |
+| `numpy` | compatibile con TF 2.17 | Elaborazione numerica degli array di landmark |
 
 ---
 
@@ -65,13 +76,13 @@ Si aprirà una finestra con il feed della webcam. Il modello inizierà a riconos
 
 ```
 ASL model project/
-├── asl_realtime_inference.py   # Script principale di inferenza
-├── asl_model_complete.keras    # Modello Keras addestrato
-├── asl_pure_tf_blackbox.zip    # Modello TensorFlow SavedModel (usato a runtime)
+├── asl_realtime_inference.py        # Script principale di inferenza
+├── asl_model_complete.keras         # Modello Keras addestrato
+├── asl_pure_tf_blackbox.zip         # Modello TensorFlow SavedModel (usato a runtime)
 ├── sign_to_prediction_index_map.json  # Mappatura indice → nome del segno (250 classi)
-├── avvia.ps1                   # Script di avvio rapido
-├── setup.ps1                   # Script di installazione automatica
-└── Docs/                       # Documentazione aggiuntiva
+├── avvia.ps1                        # Script di avvio rapido
+├── setup.ps1                        # Script di installazione automatica
+└── Docs/                            # Documentazione aggiuntiva
 ```
 
 ---
@@ -79,8 +90,8 @@ ASL model project/
 ## Come funziona
 
 1. **MediaPipe Holistic** analizza ogni frame della webcam ed estrae 543 landmark (viso, mani, corpo)
-2. I landmark vengono accumulati in un buffer di 384 frame (~13 secondi)
-3. Ogni frame viene preprocessato con la stessa pipeline del modello Kaggle (normalizzazione, derivate temporali)
+2. I landmark vengono accumulati in un buffer di 384 frame (~13 secondi a 30 fps)
+3. Ogni frame viene preprocessato con la stessa pipeline del modello originale (normalizzazione Z-score, derivate temporali dx e dx²)
 4. Il modello TensorFlow classifica la sequenza tra 250 segni ASL
 5. Il segno riconosciuto viene mostrato sull'HUD in sovraimpressione
 
@@ -88,8 +99,10 @@ ASL model project/
 
 ## Interfaccia
 
-- **Barra superiore**: segno riconosciuto + percentuale di confidenza (verde = alta confidenza)
-- **Barra inferiore**: avanzamento del buffer (diventa verde quando è pieno)
+- **Barra superiore**: segno riconosciuto + percentuale di confidenza
+  - Verde: confidenza ≥ 40%
+  - Azzurro: confidenza sotto soglia (`???`)
+- **Barra inferiore**: avanzamento del buffer (blu durante il riempimento, verde quando pieno)
 - Il riconoscimento parte automaticamente quando il buffer raggiunge i 384 frame
 
 ---
@@ -98,7 +111,9 @@ ASL model project/
 
 | Problema | Soluzione |
 |---|---|
+| Script bloccato da policy | Esegui `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 | "python non trovato" dopo il setup | Riavvia PowerShell e riprova |
 | Webcam non rilevata | Verifica che nessun altro programma stia usando la webcam |
-| Errore TensorFlow all'avvio | Assicurati di aver eseguito `setup.ps1` e che `C:\asl_env` esista |
-| Script bloccato da policy | Esegui `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| Errore `mp.solutions` non trovato | Non aggiornare mediapipe oltre la 0.10.14; riesegui `setup.ps1` |
+| Errore `protobuf` o `jax` | Versioni incompatibili installate; cancella `C:\asl_env` e riesegui `setup.ps1` |
+| Modello non trovato | Assicurati che `asl_pure_tf_blackbox.zip` sia nella cartella del progetto |

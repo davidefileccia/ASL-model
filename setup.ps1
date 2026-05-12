@@ -3,16 +3,23 @@
 # =============================================================================
 #  Esegui una sola volta prima di usare avvia.ps1
 #  Requisiti: Windows 10/11 a 64 bit, connessione Internet
+#
+#  Versioni installate (testate e compatibili):
+#    Python      3.11.9
+#    TensorFlow  2.17.0
+#    MediaPipe   0.10.14
+#    OpenCV      ultima stabile
+#    NumPy       compatibile con TF 2.17
 # =============================================================================
 
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$PYTHON_VERSION  = "3.11.9"
+$PYTHON_VERSION       = "3.11.9"
 $PYTHON_INSTALLER_URL = "https://www.python.org/ftp/python/$PYTHON_VERSION/python-$PYTHON_VERSION-amd64.exe"
-$PYTHON_INSTALLER = "$env:TEMP\python-$PYTHON_VERSION-amd64.exe"
-$PYTHON_EXE      = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
-$VENV_DIR        = "C:\asl_env"
+$PYTHON_INSTALLER     = "$env:TEMP\python-$PYTHON_VERSION-amd64.exe"
+$PYTHON_EXE           = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
+$VENV_DIR             = "C:\asl_env"
 
 Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
@@ -39,7 +46,8 @@ if (-not (Test-Path $PYTHON_EXE)) {
 }
 
 # -----------------------------------------------------------------------------
-#  2. Crea il virtual environment
+#  2. Crea il virtual environment in C:\asl_env
+#     (percorso senza caratteri speciali per evitare problemi di encoding)
 # -----------------------------------------------------------------------------
 if (-not (Test-Path "$VENV_DIR\Scripts\python.exe")) {
     Write-Host "[2/4] Creazione virtual environment in $VENV_DIR ..." -ForegroundColor Yellow
@@ -50,7 +58,6 @@ if (-not (Test-Path "$VENV_DIR\Scripts\python.exe")) {
 }
 
 $VENV_PYTHON = "$VENV_DIR\Scripts\python.exe"
-$VENV_PIP    = "$VENV_DIR\Scripts\pip.exe"
 
 # -----------------------------------------------------------------------------
 #  3. Aggiorna pip
@@ -59,11 +66,21 @@ Write-Host "[3/4] Aggiornamento pip..." -ForegroundColor Yellow
 & $VENV_PYTHON -m pip install --upgrade pip --quiet
 
 # -----------------------------------------------------------------------------
-#  4. Installa le dipendenze
+#  4. Installa le dipendenze con versioni specifiche testate
+#
+#  ATTENZIONE: non cambiare le versioni di tensorflow e mediapipe.
+#  tensorflow==2.17.0 e mediapipe==0.10.14 sono la combinazione minima
+#  che risolve i conflitti su protobuf, jax e ml_dtypes.
+#  Versioni piu' recenti di mediapipe (>= 0.10.20 circa) hanno rimosso
+#  mp.solutions.holistic, richiesto da questo script.
 # -----------------------------------------------------------------------------
-Write-Host "[4/4] Installazione librerie (opencv, numpy, tensorflow, mediapipe)..." -ForegroundColor Yellow
-Write-Host "      Questa operazione puo' richiedere alcuni minuti..." -ForegroundColor Gray
-& $VENV_PYTHON -m pip install opencv-python numpy tensorflow mediapipe
+Write-Host "[4/4] Installazione librerie..." -ForegroundColor Yellow
+Write-Host "      Questa operazione puo' richiedere 5-10 minuti (~500 MB)." -ForegroundColor Gray
+& $VENV_PYTHON -m pip install `
+    "tensorflow==2.17.0" `
+    "mediapipe==0.10.14" `
+    "opencv-python" `
+    "numpy"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRORE: Installazione dipendenze fallita." -ForegroundColor Red
